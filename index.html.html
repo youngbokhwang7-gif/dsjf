@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<!-- 아이폰 주소창 제거 및 단독 어플 구동용 메타 태그 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="KSCAT 관리">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>KSCAT · 중고 건설기계 스마트 관리 시스템</title>
+
+<!-- 아이폰 홈화면 추가 시 적용될 앱 아이콘 디자인 (포클레인 모양) -->
+<link rel="apple-touch-icon" href="https://img.icons8.com/fluent/512/excavator.png">
+
+<!-- Firebase 연동 (kscat-c0258 프로젝트 · equipment_stock 컬렉션) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<style>
+  :root{
+    /* 차분한 톤 (묵직한 슬레이트 + 흰 카드 대비) */
+    --bg:#e7ebf2;
+    --panel:#ffffff;
+    --panel-2:#fdf3e8;
+    --line:#cfd6e2;
+    --line-soft:#e2e7ef;
+    --ink:#0f1626;
+    --ink-dim:#4a5667;
+    --ink-faint:#7a8699;
+    --accent:#e2620a;
+    --accent-deep:#bd4e05;
+    --accent-soft:#fbe8d6;
+    --good:#0d9668;
+    --good-soft:#dcf2e9;
+    --bad:#dc3545;
+    --font:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard",sans-serif;
+    /* 황금비율 스케일 (1.618 기반) */
+    --s1:6px; --s2:10px; --s3:16px; --s4:26px; --s5:42px;
+    --fs-xs:11px; --fs-sm:13px; --fs-base:16px; --fs-lg:20px; --fs-xl:26px; --fs-2xl:42px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;font-family:var(--font);-webkit-tap-highlight-color:transparent}
+  body{
+    color:var(--ink);background:#16223a;
+    overflow-x:hidden;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    line-height:1.5;
+  }
+  .wrap{max-width:640px;margin:0 auto;padding:var(--s4) var(--s3) 100px}
+
+  /* 헤더 (황금비율 타이포) */
+  .brand{font-size:var(--fs-xs);letter-spacing:3px;color:#ff9f43;font-weight:800;text-transform:uppercase}
+  h1{font-size:var(--fs-2xl);font-weight:800;margin:var(--s1) 0 var(--s1);letter-spacing:-1px;line-height:1.1;color:#fff}
+  .lead{font-size:var(--fs-sm);color:#9fb0c9;margin-bottom:var(--s4);line-height:1.6}
+
+  /* 탭 메뉴 */
+  .tabs{display:flex;gap:var(--s2);overflow-x:auto;scrollbar-width:none;padding-bottom:2px;margin-bottom:var(--s3)}
+  .tabs::-webkit-scrollbar{display:none}
+  /* 홈 대시보드 카드 */
+  .home-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3)}
+  .home-card{background:var(--panel);border:1.5px solid var(--line);border-radius:var(--s4);padding:var(--s4) var(--s3);cursor:pointer;box-shadow:0 4px 16px rgba(15,22,38,.06);transition:.15s;min-height:150px;display:flex;flex-direction:column}
+  .home-card:active{transform:scale(.97)}
+  .home-card .hc-ico{width:56px;height:56px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:28px;margin-bottom:auto}
+  .home-card .hc-title{font-size:var(--fs-lg);font-weight:800;margin-top:var(--s3);letter-spacing:-.4px}
+  .home-card .hc-sub{font-size:var(--fs-sm);color:var(--ink-dim);margin-top:3px}
+  .home-card .hc-sub b{color:var(--accent-deep)}
+  .home-card[data-go="cal"]{grid-column:1 / -1;min-height:auto;flex-direction:row;align-items:center;gap:var(--s3)}
+  .home-card[data-go="cal"] .hc-ico{margin-bottom:0}
+  .home-card[data-go="cal"] .hc-title{margin-top:0}
+  /* 하위화면 홈바 */
+  .sub-bar{display:flex;align-items:center;gap:var(--s3);margin-bottom:var(--s3)}
+  .back-home{padding:9px 16px;border-radius:var(--s2);border:1.5px solid var(--line);background:var(--panel);color:var(--ink);font-size:var(--fs-base);font-weight:800;cursor:pointer;box-shadow:0 2px 8px rgba(15,22,38,.04)}
+  .back-home:active{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-deep)}
+  .sub-bar span{font-size:var(--fs-lg);font-weight:800}
+  .tab{flex-shrink:0;background:var(--panel);border:1.5px solid var(--line);padding:12px 12px;text-align:center;border-radius:var(--s2);cursor:pointer;font-weight:700;font-size:var(--fs-sm);color:var(--ink-dim);transition:0.15s;box-shadow:0 2px 8px rgba(26,34,51,.04);white-space:nowrap}
+  .tab.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-deep);box-shadow:0 4px 14px rgba(245,130,31,.18)}
+  .cal-btn{flex-shrink:0;width:38px;height:38px;border:1.5px solid var(--accent);border-radius:50%;background:var(--accent-soft);color:var(--accent-deep);cursor:pointer;display:flex;align-items:center;justify-content:center;margin-left:auto}
+  .cal-btn svg{width:20px;height:20px}
+  .cal-btn:active{background:var(--accent);color:#fff}
+
+  /* 섹션 제어 */
+  .section{display:none}
+  .section.show{display:block}
+
+  /* 폼 스타일 */
+  .card{background:var(--panel);border:1.5px solid var(--line);border-radius:var(--s4);padding:var(--s4);margin-bottom:var(--s3);box-shadow:0 4px 18px rgba(26,34,51,.05)}
+  .card h2{font-size:var(--fs-lg);font-weight:800;margin-bottom:var(--s3);color:var(--ink);display:flex;align-items:center;gap:var(--s1);letter-spacing:-.4px}
+  .form-group{margin-bottom:var(--s3)}
+  .form-group label{display:block;font-size:var(--fs-sm);color:var(--ink-dim);margin-bottom:var(--s1);font-weight:700}
+  .form-group input, .form-group select, .form-group textarea{
+    width:100%;background:var(--bg);border:1.5px solid var(--line);color:var(--ink);padding:13px 14px;border-radius:var(--s2);font-size:var(--fs-base);outline:none;transition:.15s
+  }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px var(--accent-soft)}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2)}
+
+  /* 사진 등록 박스 */
+  .photo-drop{border:2px dashed var(--line);background:var(--bg);border-radius:var(--s2);padding:var(--s4);text-align:center;cursor:pointer;margin-top:var(--s1)}
+  .photo-drop span{font-size:var(--fs-sm);color:var(--ink-faint)}
+  .photo-preview{display:flex;gap:var(--s2);margin-top:var(--s2);overflow-x:auto}
+  .photo-preview img{width:70px;height:70px;object-fit:cover;border-radius:var(--s2);border:1px solid var(--line)}
+
+  /* 저장 버튼 (황금비율 높이) */
+  .btn-submit{width:100%;padding:17px;border:none;border-radius:var(--s3);background:linear-gradient(135deg,var(--accent),var(--accent-deep));color:#fff;font-size:var(--fs-lg);font-weight:800;cursor:pointer;box-shadow:0 6px 18px rgba(245,130,31,.32);letter-spacing:-.3px}
+  .btn-submit:active{transform:translateY(1px)}
+
+  /* 장비 리스트 및 검색 */
+  .search-box{position:sticky;top:0;background:var(--bg);padding:var(--s2) 0;z-index:10;margin-bottom:var(--s3)}
+  .search-box input{width:100%;background:var(--panel);border:1.5px solid var(--line);color:var(--ink);padding:14px 16px;border-radius:var(--s3);font-size:var(--fs-base);outline:none;box-shadow:0 2px 8px rgba(26,34,51,.04)}
+  .search-box input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+
+  .eq-item{background:var(--panel);border:1.5px solid var(--line);border-radius:var(--s4);padding:var(--s3);margin-bottom:var(--s2);cursor:pointer;position:relative;box-shadow:0 3px 12px rgba(26,34,51,.05);transition:.15s}
+  .eq-item:active{transform:scale(.99)}
+  .eq-item .badge{position:absolute;top:var(--s3);right:var(--s3);padding:4px 10px;border-radius:var(--s1);font-size:var(--fs-xs);font-weight:800}
+  .eq-item .badge.in{background:var(--good-soft);color:var(--good)}
+  .eq-item .badge.out{background:rgba(239,68,68,0.12);color:var(--bad)}
+  .eq-title{font-size:var(--fs-lg);font-weight:800;color:var(--ink);margin-bottom:var(--s1);letter-spacing:-.4px;padding-right:70px}
+  .eq-meta{font-size:var(--fs-sm);color:var(--ink-dim);display:flex;gap:var(--s3);margin-bottom:var(--s1);flex-wrap:wrap}
+
+  /* 리스트 내부 매입/판매 이력 정보창 */
+  .eq-trade-info{font-size:var(--fs-sm);color:var(--ink-dim);display:grid;grid-template-columns:1fr 1fr;gap:var(--s1);background:var(--bg);padding:var(--s2) var(--s2);border-radius:var(--s2);margin-bottom:var(--s1);margin-top:var(--s1)}
+  .eq-cost{font-size:var(--fs-base);font-weight:800;color:var(--accent-deep);border-top:1px solid var(--line-soft);padding-top:var(--s2);margin-top:var(--s1)}
+
+  /* 원가/마진 안내 뱃지 */
+  .margin-info{display:flex;justify-content:space-between;background:var(--panel-2);padding:var(--s2) var(--s3);border-radius:var(--s2);font-size:var(--fs-sm);margin-top:var(--s2)}
+  .margin-info span.plus {color:var(--good);font-weight:bold}
+
+  /* 카테고리 필터 칩 */
+  .cat-filter{display:flex;gap:var(--s2);overflow-x:auto;padding-bottom:var(--s2);margin-bottom:var(--s2);scrollbar-width:none}
+  .cat-filter::-webkit-scrollbar{display:none}
+  .cat-chip{flex-shrink:0;padding:9px 18px;border-radius:22px;border:1.5px solid var(--line);background:var(--panel);font-size:var(--fs-sm);font-weight:700;color:var(--ink-dim);cursor:pointer;white-space:nowrap;transition:.15s}
+  .cat-chip.on{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 3px 10px rgba(245,130,31,.28)}
+
+  /* 테이블 스타일 리스트 */
+  .list-head{display:grid;grid-template-columns:58px 1fr auto;gap:var(--s2);align-items:center;padding:11px var(--s3);background:var(--accent);color:#fff;border-radius:var(--s2) var(--s2) 0 0;font-size:var(--fs-sm);font-weight:800}
+  .list-head .lh-price{text-align:right}
+  .eq-row{display:grid;grid-template-columns:58px 1fr auto;gap:var(--s2);align-items:center;padding:12px var(--s3);background:var(--panel);border:1px solid var(--line);border-top:none;cursor:pointer;transition:.12s}
+  .eq-row:nth-child(even){background:#fafbfd}
+  .eq-row:last-child{border-radius:0 0 var(--s2) var(--s2)}
+  .eq-row:active{background:var(--accent-soft)}
+  .eq-thumb{width:58px;height:58px;border-radius:var(--s2);object-fit:cover;background:var(--line-soft);display:flex;align-items:center;justify-content:center;color:#b8c2d0}
+  .eq-thumb svg{width:32px;height:32px}
+  .eq-info{min-width:0}
+  .eq-cat-line{font-size:var(--fs-xs);color:var(--accent-deep);font-weight:700;margin-bottom:1px}
+  .eq-cat-line .yr{color:var(--ink-faint);font-weight:600;margin-left:4px}
+  .eq-model{font-size:var(--fs-base);font-weight:800;color:var(--ink);line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .eq-sub{display:flex;gap:6px;align-items:center;margin-top:3px;flex-wrap:wrap}
+  .eq-grade{background:var(--good-soft);color:var(--good);padding:1px 7px;border-radius:5px;font-size:var(--fs-xs);font-weight:800}
+  .eq-loc{font-size:var(--fs-xs);color:var(--ink-faint)}
+  .eq-price{font-size:var(--fs-base);font-weight:800;color:var(--accent-deep);text-align:right;white-space:nowrap}
+  .eq-price small{font-size:var(--fs-xs);color:var(--ink-faint);font-weight:600;margin-left:1px}
+  .list-count{font-size:var(--fs-sm);color:var(--ink-dim);font-weight:700;padding:2px 2px 10px}
+  .list-count b{color:var(--accent-deep)}
+  .list-empty{text-align:center;padding:60px 20px;color:var(--ink-faint);font-size:var(--fs-base);line-height:1.6}
+
+  /* 상세 팝업 */
+  .detail-overlay{position:fixed;inset:0;z-index:1000;background:rgba(26,34,51,.5);display:none;align-items:flex-end;justify-content:center}
+  .detail-overlay.show{display:flex}
+  .detail-sheet{background:#fff;width:100%;max-width:640px;border-radius:var(--s4) var(--s4) 0 0;max-height:92vh;overflow-y:auto;animation:sheetUp .28s cubic-bezier(.3,.8,.3,1)}
+  @keyframes sheetUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+  .dt-head{position:sticky;top:0;background:#fff;display:flex;align-items:center;padding:var(--s3) var(--s4);border-bottom:1px solid var(--line);z-index:2}
+  .dt-head h2{font-size:var(--fs-lg);font-weight:800;flex:1;letter-spacing:-.4px}
+  .dt-x{font-size:28px;color:var(--ink-faint);line-height:1;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .home-btn{padding:9px 16px;border-radius:var(--s2);border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent-deep);font-size:var(--fs-sm);font-weight:800;cursor:pointer;white-space:nowrap}
+  .home-btn:active{transform:translateY(1px)}
+  .dt-photos{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none}
+  .dt-photos::-webkit-scrollbar{display:none}
+  .dt-photos img{flex:0 0 100%;aspect-ratio:4/3;object-fit:cover;scroll-snap-align:center}
+  .dt-noimg{aspect-ratio:16/9;background:var(--line-soft);display:flex;align-items:center;justify-content:center;color:#b8c2d0}
+  .dt-noimg svg{width:72px;height:72px}
+  .dt-body{padding:var(--s4)}
+  .dt-cat{font-size:var(--fs-sm);color:var(--accent-deep);font-weight:700}
+  .dt-title{font-size:var(--fs-xl);font-weight:800;margin:var(--s1) 0 var(--s2);letter-spacing:-.6px;line-height:1.2}
+  .dt-price{font-size:var(--fs-2xl);font-weight:800;color:var(--accent-deep);margin-bottom:var(--s1)}
+  .dt-price small{font-size:var(--fs-base);color:var(--ink-faint);font-weight:600}
+  .dt-margin{font-size:var(--fs-sm);color:var(--ink-dim);margin-bottom:var(--s4)}
+  .dt-margin b{color:var(--good)}
+  .dt-spec{display:grid;grid-template-columns:auto 1fr;gap:11px var(--s4);background:var(--bg);border-radius:var(--s3);padding:var(--s4);margin-bottom:var(--s4);font-size:var(--fs-base)}
+  .dt-spec dt{color:var(--ink-dim);font-weight:600}
+  .dt-spec dd{font-weight:700;text-align:right}
+  .dt-trade{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2);margin-bottom:var(--s4)}
+  .dt-trade-box{background:var(--bg);border-radius:var(--s2);padding:var(--s3);font-size:var(--fs-sm)}
+  .dt-trade-box .tb-label{color:var(--ink-faint);font-weight:600;font-size:var(--fs-xs);margin-bottom:4px}
+  .dt-trade-box .tb-val{font-weight:700;color:var(--ink);line-height:1.4}
+  .dt-del{width:100%;padding:15px;border:1.5px solid var(--bad);border-radius:var(--s3);background:#fff;color:var(--bad);font-size:var(--fs-base);font-weight:800;cursor:pointer}
+  .dt-del:active{background:#fef2f2}
+
+  /* 캘린더 */
+  .cal-wrap{padding:var(--s4)}
+  .cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--s3)}
+  .cal-nav button{width:40px;height:40px;border:1.5px solid var(--line);background:var(--panel);border-radius:var(--s2);font-size:22px;color:var(--ink-dim);cursor:pointer}
+  .cal-nav span{font-size:var(--fs-lg);font-weight:800}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+  .cal-dow{text-align:center;font-size:var(--fs-xs);font-weight:700;color:var(--ink-faint);padding:4px 0}
+  .cal-cell{aspect-ratio:1;border-radius:var(--s2);background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:6px;font-size:var(--fs-sm);font-weight:600;cursor:pointer;position:relative;border:1.5px solid transparent}
+  .cal-cell.empty{background:transparent;cursor:default}
+  .cal-cell.today{border-color:var(--accent)}
+  .cal-cell.sel{background:var(--accent-soft);border-color:var(--accent)}
+  .cal-dots{display:flex;gap:2px;margin-top:3px}
+  .cal-dots i{width:5px;height:5px;border-radius:50%}
+  .cal-legend{display:flex;gap:var(--s3);justify-content:center;margin:var(--s3) 0;font-size:var(--fs-xs);color:var(--ink-dim)}
+  .cal-legend span{display:flex;align-items:center;gap:5px}
+  .cal-legend i{width:9px;height:9px;border-radius:50%}
+  .cal-day-item{display:flex;gap:var(--s2);align-items:center;padding:11px var(--s3);background:var(--bg);border-radius:var(--s2);margin-bottom:var(--s2);font-size:var(--fs-sm)}
+  .cal-day-item .cdi-tag{font-size:var(--fs-xs);font-weight:800;padding:2px 8px;border-radius:5px;color:#fff;flex-shrink:0}
+  .cal-day-empty{text-align:center;color:var(--ink-faint);padding:var(--s4);font-size:var(--fs-sm)}
+  .memo-add{display:flex;gap:var(--s2);margin-top:var(--s3)}
+  .memo-add input{flex:1;background:var(--bg);border:1.5px solid var(--line);color:var(--ink);padding:12px 14px;border-radius:var(--s2);font-size:var(--fs-base);outline:none}
+  .memo-add input:focus{border-color:var(--accent)}
+  .memo-add button{flex-shrink:0;padding:0 18px;border:none;border-radius:var(--s2);background:var(--accent);color:#fff;font-size:var(--fs-base);font-weight:800;cursor:pointer}
+
+  /* 정비 이력 */
+  .fix-card{background:var(--panel);border:1.5px solid var(--line);border-radius:var(--s3);padding:var(--s3);margin-bottom:var(--s2);box-shadow:0 2px 8px rgba(26,34,51,.04)}
+  .fix-card .fc-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--s1)}
+  .fix-card .fc-model{font-size:var(--fs-base);font-weight:800}
+  .fix-card .fc-total{font-size:var(--fs-sm);font-weight:800;color:var(--accent-deep)}
+  .fix-row{display:flex;justify-content:space-between;align-items:center;font-size:var(--fs-sm);color:var(--ink-dim);padding:6px 0;border-top:1px solid var(--line-soft)}
+  .fix-row .fr-del{color:var(--bad);cursor:pointer;font-weight:700;font-size:var(--fs-xs)}
+  .fix-photos{display:flex;gap:6px;padding:6px 0 2px;flex-wrap:wrap}
+  .fix-photos img{width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:pointer}
+  .fix-empty{text-align:center;color:var(--ink-faint);padding:50px 20px;font-size:var(--fs-base);line-height:1.6}
+
+  /* 입고현황 */
+  .stock-card{display:flex;align-items:center;gap:var(--s3);background:var(--panel);border:1.5px solid var(--line);border-radius:var(--s3);padding:var(--s3);margin-bottom:var(--s2);box-shadow:0 2px 8px rgba(26,34,51,.04)}
+  .stock-card .sc-main{flex:1;min-width:0}
+  .stock-card .sc-model{font-size:var(--fs-base);font-weight:800;margin-bottom:2px}
+  .stock-card .sc-meta{font-size:var(--fs-sm);color:var(--ink-dim)}
+  .stock-card .sc-days{text-align:center;flex-shrink:0}
+  .stock-card .sc-days b{display:block;font-size:var(--fs-lg);font-weight:800;color:var(--accent-deep);line-height:1}
+  .stock-card .sc-days small{font-size:var(--fs-xs);color:var(--ink-faint)}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="brand">KSCAT</div>
+  <h1 id="pageTitle">자산관리</h1>
+  <div class="lead" id="pageLead">현장 자산을 한 곳에서 · 입고 · 정비 · 일정 관리</div>
+
+  <!-- 홈 대시보드 -->
+  <div class="section show" id="sec-home">
+    <div class="home-grid">
+      <div class="home-card" data-go="sec-list">
+        <div class="hc-ico" style="background:#e8eeff">📦</div>
+        <div class="hc-title">자산 보관함</div>
+        <div class="hc-sub">전체 장비 목록 · <b id="home-count">0</b>대</div>
+      </div>
+      <div class="home-card" data-go="sec-reg">
+        <div class="hc-ico" style="background:#fff1e3">➕</div>
+        <div class="hc-title">신규 입고</div>
+        <div class="hc-sub">장비 매입 등록</div>
+      </div>
+      <div class="home-card" data-go="sec-fix">
+        <div class="hc-ico" style="background:#e7f7f0">🔧</div>
+        <div class="hc-title">정비관리</div>
+        <div class="hc-sub">정비 내역 · 사진 기록</div>
+      </div>
+      <div class="home-card" data-go="sec-stock">
+        <div class="hc-ico" style="background:#fdeaea">📋</div>
+        <div class="hc-title">입고현황</div>
+        <div class="hc-sub">미판매 재고 · 보관일수</div>
+      </div>
+      <div class="home-card" data-go="cal">
+        <div class="hc-ico" style="background:#f3ecff">📅</div>
+        <div class="hc-title">일정관리</div>
+        <div class="hc-sub">입고·판매·정비·기타 일정</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 하위 화면 상단 '홈으로' 바 -->
+  <div class="sub-bar" id="subBar" style="display:none">
+    <button class="back-home" id="backHome">‹ 홈</button>
+    <span id="subBarTitle"></span>
+  </div>
+
+  <div class="section" id="sec-list">
+    <div class="cat-filter" id="catFilter">
+      <button class="cat-chip on" data-cat="전체">전체</button>
+      <button class="cat-chip" data-cat="굴착기">굴착기</button>
+      <button class="cat-chip" data-cat="로더">로더</button>
+      <button class="cat-chip" data-cat="기타">기타</button>
+    </div>
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="🔍 규격, 제조사, 관리번호 또는 매입/판매처 검색...">
+    </div>
+    <div id="equipment-container">
+    </div>
+  </div>
+
+  <div class="section" id="sec-reg">
+    <form id="regForm" onsubmit="saveEquipment(event)">
+      
+      <div class="card">
+        <h2>🚜 기본 제원 정보</h2>
+        <div class="form-group">
+          <label>장비 종류</label>
+          <select id="cat_name" required>
+            <option value="굴착기">굴착기</option>
+            <option value="로더">로더</option>
+            <option value="기타">기타</option>
+          </select>
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label>제조사 (국가별)</label>
+            <select id="brand_name" required>
+              <optgroup label="🇰🇷 한국 브랜드">
+                <option>디벨론 (HD현대인프라코어)</option>
+                <option>HD현대건설기계</option>
+                <option>두산 (DOOSAN)</option>
+                <option>삼성 (SAMSUNG)</option>
+              </optgroup>
+              <optgroup label="🇺🇸 미국 브랜드">
+                <option>CATERPILLAR (cat)</option>
+                <option>존디어 (John Deere)</option>
+                <option>케이스 (CASE)</option>
+                <option>보브캣 (Bobcat)</option>
+              </optgroup>
+              <optgroup label="🇯🇵 일본 브랜드">
+                <option>얀마 (YANMAR)</option>
+                <option>구보타 (KUBOTA)</option>
+                <option>코마츠 (KOMATSU)</option>
+                <option>히타치 (HITACHI)</option>
+              </optgroup>
+              <optgroup label="🇪🇺 유럽/기타">
+                <option>볼보 (VOLVO)</option>
+                <option>히드로멕 (HYDROMEK)</option>
+                <option>지씨비 (JCB)</option>
+                <option>기타 브랜드</option>
+              </optgroup>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>모델명 / 규격</label>
+            <input type="text" id="model_name" placeholder="예: DX140W, 02공이, HL960" required>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label>연식 (년형)</label>
+            <input type="number" id="year_model" value="2020" min="1990" max="2030" required>
+          </div>
+          <div class="form-group">
+            <label>가동 시간 (Hrs)</label>
+            <input type="number" id="hours_meter" placeholder="시간메타값 입력" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>자체 관리번호 / 차대번호</label>
+          <input type="text" id="serial_no" placeholder="야적장 넘버링 혹은 차대번호 고유값" required>
+        </div>
+      </div>
+
+      <!-- 💰 매입처 및 판매처 정보 입력란 연동 보완 카드 -->
+      <div class="card">
+        <h2>💰 매입 · 판매 정산 기록관리</h2>
+        
+        <!-- 매입 정보 입력을 위한 그리드 -->
+        <div class="grid-2">
+          <div class="form-group">
+            <label>매입일</label>
+            <input type="date" id="buy_date">
+          </div>
+          <div class="form-group">
+            <label>매입처 (공급처)</label>
+            <input type="text" id="buy_customer" placeholder="개인차주 또는 매매상사명">
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="form-group">
+            <label>매입 금액 (만원)</label>
+            <input type="number" id="buy_price" value="0" oninput="calcMarginHint()">
+          </div>
+          <div class="form-group">
+            <label>정비 / 도색비 (만원)</label>
+            <input type="number" id="repair_price" value="0" oninput="calcMarginHint()">
+          </div>
+        </div>
+
+        <hr style="border:none; border-top:1px dashed var(--line); margin:6px 0 14px;">
+
+        <!-- 판매 정보 입력을 위한 그리드 -->
+        <div class="grid-2">
+          <div class="form-group">
+            <label>판매일 (출고일)</label>
+            <input type="date" id="sell_date">
+          </div>
+          <div class="form-group">
+            <label>판매처 (인도처)</label>
+            <input type="text" id="sell_customer" placeholder="현장 매수 고객 또는 딜러명">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>희망 판매가 / 최종 낙찰가 (만원)</label>
+          <input type="number" id="sell_price" value="0" oninput="calcMarginHint()">
+        </div>
+        
+        <div class="margin-info">
+          <span>예상 원가 합계: <b id="total-cost-hint">0</b>만원</span>
+          <span>예상 마진익: <span id="margin-hint" class="plus">0</span>만원</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📸 외관 및 등록증 서류철 (최대 6장)</h2>
+        <div class="photo-drop" onclick="document.getElementById('photoInput').click()">
+          <span>📷 여기를 터치하여 스마트폰 카메라/갤러리 연동</span>
+          <input type="file" id="photoInput" accept="image/*" multiple style="display:none" onchange="previewPhotos(this)">
+        </div>
+        <div class="photo-preview" id="photo-preview-zone"></div>
+      </div>
+
+      <button type="submit" class="btn-submit">현장 장비 입고 데이터 저장</button>
+    </form>
+  </div>
+
+  <!-- 정비관리 -->
+  <div class="section" id="sec-fix">
+    <div class="card">
+      <h2>🔧 정비 내역 등록</h2>
+      <div class="form-group">
+        <label>장비 선택</label>
+        <select id="fix_target"></select>
+      </div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label>정비일</label>
+          <input type="date" id="fix_date">
+        </div>
+        <div class="form-group">
+          <label>정비비 (만원)</label>
+          <input type="number" id="fix_cost" placeholder="예) 50">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>정비 내용</label>
+        <input type="text" id="fix_desc" placeholder="예) 유압호스 교체, 엔진오일, 도색 등">
+      </div>
+      <div class="form-group">
+        <label>정비 사진 (최대 4장)</label>
+        <div class="photo-drop" onclick="document.getElementById('fixPhotoInput').click()">
+          <span>📷 정비 전/후, 교체 부품 사진 촬영·첨부</span>
+          <input type="file" id="fixPhotoInput" accept="image/*" multiple style="display:none" onchange="previewFixPhotos(this)">
+        </div>
+        <div class="photo-preview" id="fix-photo-zone"></div>
+      </div>
+      <button type="button" class="btn-submit" onclick="addRepair()">정비 내역 추가</button>
+    </div>
+    <div id="fix-history"></div>
+  </div>
+
+  <!-- 입고현황 (미판매 장비만) -->
+  <div class="section" id="sec-stock">
+    <div id="stock-container"></div>
+  </div>
+
+</div>
+
+<!-- 캘린더 팝업 -->
+<div class="detail-overlay" id="calOverlay">
+  <div class="detail-sheet">
+    <div class="dt-head">
+      <h2 id="calTitle">일정 달력</h2>
+      <button class="home-btn" id="calClose">🏠 홈으로</button>
+    </div>
+    <div class="cal-wrap">
+      <div class="cal-nav">
+        <button id="calPrev">‹</button>
+        <span id="calMonth"></span>
+        <button id="calNext">›</button>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+      <div class="cal-legend">
+        <span><i style="background:#0d9668"></i>입고</span>
+        <span><i style="background:#dc3545"></i>판매</span>
+        <span><i style="background:#e2620a"></i>정비</span>
+        <span><i style="background:#7c5cdb"></i>기타</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 날짜별 일정 팝업 -->
+<div class="detail-overlay" id="dayOverlay">
+  <div class="detail-sheet" style="max-height:70vh">
+    <div class="dt-head">
+      <h2 id="dayTitle">일정</h2>
+      <div class="dt-x" id="dayClose">&times;</div>
+    </div>
+    <div class="dt-body" id="dayBody"></div>
+  </div>
+</div>
+
+<!-- 장비 상세 팝업 -->
+<div class="detail-overlay" id="detailOverlay">
+  <div class="detail-sheet">
+    <div class="dt-head">
+      <h2>장비 상세</h2>
+      <div class="dt-x" id="detailClose">&times;</div>
+    </div>
+    <div id="detailBody"></div>
+  </div>
+</div>
+
+<script>
+// ===== Firebase 연동 =====
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyA_NfY1l44HQQ89IRLKdroUcFsDxfPNECk",
+  authDomain: "kscat-c0258.firebaseapp.com",
+  projectId: "kscat-c0258",
+  storageBucket: "kscat-c0258.firebasestorage.app",
+  messagingSenderId: "663432148357",
+  appId: "1:663432148357:web:571a6b428b4a554e0fc0ec"
+};
+let FDB = null, CLOUD_ON = false;
+const STOCK_COL = 'equipment_stock';   // 재고 장비 컬렉션
+
+try {
+  if (typeof firebase === 'undefined') throw new Error('Firebase SDK 로드 실패(네트워크)');
+  if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+  FDB = firebase.firestore();
+  CLOUD_ON = true;
+} catch(e) {
+  console.warn('Firebase 초기화 실패 — 오프라인(localStorage) 모드로 작동', e);
+  CLOUD_ON = false;
+}
+
+// 데이터 배열 구조 내 매입/판매 세부 필드 전면 바인딩[cite: 10]
+let DB = JSON.parse(localStorage.getItem('KSCAT_DB')) || [
+  { cat:"굴착기", brand: "디벨론 (HD현대인프라코어)", model: "DX140W-5 (06휠)", year: 2019, hours: 6800, serial: "KS-0842", buy: 5400, repair: 350, repairs:[{date:"2026-03-15",desc:"유압호스 교체",cost:200},{date:"2026-04-02",desc:"엔진오일·필터",cost:150}], sell: 6500, buyDate: "2026-03-10", buyCust: "중앙상사", sellDate: "2026-05-18", sellCust: "경기 용인현장", photos: [], status: "입고보관" },
+  { cat:"굴착기", brand: "볼보 (VOLVO)", model: "EC60E (02궤도)", year: 2021, hours: 4200, serial: "KS-0911", buy: 3200, repair: 120, repairs:[{date:"2026-04-20",desc:"하부롤러 정비",cost:120}], sell: 3900, buyDate: "2026-04-12", buyCust: "부산차주", sellDate: "", sellCust: "", photos: [], status: "입고보관" },
+  { cat:"로더", brand: "CATERPILLAR (cat)", model: "CAT950M (휠로더)", year: 2020, hours: 5100, serial: "KS-1024", buy: 8200, repair: 210, repairs:[{date:"2026-05-05",desc:"버켓 도색",cost:210}], sell: 9500, buyDate: "2026-05-01", buyCust: "인천상사", sellDate: "", sellCust: "", photos: [], status: "입고보관" }
+];
+
+// 기타 일정 (직접 등록)
+let MEMOS = JSON.parse(localStorage.getItem('KSCAT_MEMOS')) || [];
+
+// ===== 대시보드 네비게이션 =====
+const SEC_TITLE = {'sec-list':'자산 보관함','sec-reg':'신규 입고','sec-fix':'정비관리','sec-stock':'입고현황'};
+function goSection(target){
+  if(target==='cal'){ openCalendar(); return; }
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('show'));
+  document.getElementById('sec-home').classList.remove('show');
+  document.getElementById(target).classList.add('show');
+  // 홈바 표시
+  const bar = document.getElementById('subBar');
+  bar.style.display = 'flex';
+  document.getElementById('subBarTitle').textContent = SEC_TITLE[target] || '';
+  document.getElementById('pageTitle').textContent = SEC_TITLE[target] || '자산관리';
+  document.getElementById('pageLead').style.display = 'none';
+  if(target==='sec-fix') renderFixTab();
+  if(target==='sec-stock') renderStockTab();
+  window.scrollTo(0,0);
+}
+function goHome(){
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('show'));
+  document.getElementById('sec-home').classList.add('show');
+  document.getElementById('subBar').style.display = 'none';
+  document.getElementById('pageTitle').textContent = '자산관리';
+  document.getElementById('pageLead').style.display = '';
+  window.scrollTo(0,0);
+}
+document.querySelectorAll('.home-card').forEach(card => {
+  card.onclick = () => goSection(card.dataset.go);
+});
+document.getElementById('backHome').onclick = goHome;
+
+// ===== 정비비 합계 (정비내역 우선, 없으면 기존 repair 값) =====
+function repairTotal(item){
+  if(item.repairs && item.repairs.length) return item.repairs.reduce((s,r)=>s+(+r.cost||0),0);
+  return +item.repair || 0;
+}
+
+// 사진 프리뷰 제어 리더
+let currentBase64Photos = [];
+function previewPhotos(input) {
+  const zone = document.getElementById('photo-preview-zone');
+  zone.innerHTML = ""; currentBase64Photos = [];
+  const files = Array.from(input.files).slice(0, 6);   // 최대 6장
+
+  files.forEach(file => {
+    compressPhoto(file).then(b64 => {
+      currentBase64Photos.push(b64);
+      const img = document.createElement('img');
+      img.src = b64;
+      zone.appendChild(img);
+    });
+  });
+}
+
+// 사진 자동 압축 (긴 변 1000px, JPEG 70% — 용량 줄여 6장도 안전 저장)
+function compressPhoto(file){
+  return new Promise(res => {
+    const img = new Image(), reader = new FileReader();
+    reader.onload = () => { img.onload = () => {
+      const max = 1000, sc = Math.min(1, max / Math.max(img.width, img.height));
+      const cv = document.createElement('canvas');
+      cv.width = img.width * sc; cv.height = img.height * sc;
+      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+      res(cv.toDataURL('image/jpeg', 0.7));
+    }; img.src = reader.result; };
+    reader.readAsDataURL(file);
+  });
+}
+
+// 실시간 원가/마진 예측 힌트 계산식
+function calcMarginHint() {
+  const buy = parseFloat(document.getElementById('buy_price').value) || 0;
+  const repair = parseFloat(document.getElementById('repair_price').value) || 0;
+  const sell = parseFloat(document.getElementById('sell_price').value) || 0;
+  
+  const cost = buy + repair;
+  const margin = sell - cost;
+  
+  document.getElementById('total-cost-hint').textContent = cost.toLocaleString();
+  document.getElementById('margin-hint').textContent = margin.toLocaleString();
+}
+
+// 장비 저장 액션
+function saveEquipment(e) {
+  e.preventDefault();
+  
+  const newObj = {
+    cat: document.getElementById('cat_name').value,
+    brand: document.getElementById('brand_name').value,
+    model: document.getElementById('model_name').value,
+    year: parseInt(document.getElementById('year_model').value) || 2026,
+    hours: parseInt(document.getElementById('hours_meter').value) || 0,
+    serial: document.getElementById('serial_no').value,
+    buy: parseFloat(document.getElementById('buy_price').value) || 0,
+    repair: parseFloat(document.getElementById('repair_price').value) || 0,
+    sell: parseFloat(document.getElementById('sell_price').value) || 0,
+    
+    // 신규 매입/판매 인풋 매핑 바인딩[cite: 10]
+    buyDate: document.getElementById('buy_date').value,
+    buyCust: document.getElementById('buy_customer').value,
+    sellDate: document.getElementById('sell_date').value,
+    sellCust: document.getElementById('sell_customer').value,
+    
+    photos: currentBase64Photos,
+    status: "입고보관"
+  };
+  
+  DB.unshift(newObj);
+  localStorage.setItem('KSCAT_DB', JSON.stringify(DB));
+
+  // Firestore에도 저장 (클라우드 연동 시)
+  if (CLOUD_ON) {
+    newObj.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+    FDB.collection(STOCK_COL).add(newObj)
+      .then(ref => { newObj.cloudId = ref.id; localStorage.setItem('KSCAT_DB', JSON.stringify(DB)); })
+      .catch(err => console.warn('클라우드 저장 실패(로컬은 저장됨)', err));
+  }
+  
+  document.getElementById('regForm').reset();
+  document.getElementById('photo-preview-zone').innerHTML = "";
+  
+  alert("⚙️ 현장 장비 및 대금 유통처 기록이 완료되었습니다!");
+  renderList();
+  
+  goSection('sec-list');
+}
+
+// 리스트 드로잉 컴포넌트 엔진
+let curCat = "전체";
+
+// 장비 아이콘 (사진 없을 때)
+const EQ_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17h2l1-4h8l3 4h4"/><circle cx="7" cy="19" r="2"/><circle cx="17" cy="19" r="2"/><path d="M14 13V7l5 3"/></svg>`;
+
+function esc(s){return String(s||'').replace(/[<>&"]/g,m=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[m]));}
+
+function renderList(filterText = "") {
+  const container = document.getElementById('equipment-container');
+  const ft = filterText.toLowerCase();
+
+  // 필터링
+  const items = DB.filter(item => {
+    if(curCat !== "전체" && (item.cat || "기타") !== curCat) return false;
+    if(ft){
+      const t = (item.model+' '+item.brand+' '+(item.serial||'')+' '+(item.buyCust||'')+' '+(item.sellCust||'')).toLowerCase();
+      if(!t.includes(ft)) return false;
+    }
+    return true;
+  });
+
+  const hc = document.getElementById('home-count'); if(hc) hc.textContent = DB.length;
+
+  if(!items.length){
+    container.innerHTML = `<div class="list-empty">${EQ_ICON.replace('width="1.5"','')}해당 장비가 없습니다.<br>다른 종류를 선택하거나 새로 입고해 보세요.</div>`;
+    return;
+  }
+
+  let html = `<div class="list-count">총 <b>${items.length}대</b></div>
+    <div class="list-head"><span>사진</span><span>제작사·모델명</span><span class="lh-price">희망가격</span></div>`;
+
+  html += items.map(item => {
+    const idx = DB.indexOf(item);
+    const loc = item.sellCust || item.buyCust || '';
+    const grade = item.grade || 'A급';
+    const thumb = (item.photos && item.photos[0])
+      ? `<img class="eq-thumb" src="${item.photos[0]}" alt="">`
+      : `<div class="eq-thumb">${EQ_ICON}</div>`;
+    return `<div class="eq-row" data-idx="${idx}">
+      ${thumb}
+      <div class="eq-info">
+        <div class="eq-cat-line">${esc(item.cat||'기타')} · ${esc(item.brand)}<span class="yr">${item.year}년</span></div>
+        <div class="eq-model">${esc(item.model)}</div>
+        <div class="eq-sub"><span class="eq-grade">${esc(grade)}</span>${loc?`<span class="eq-loc">${esc(loc)}</span>`:''}</div>
+      </div>
+      <div class="eq-price">${Number(item.sell).toLocaleString()}<small>만원</small></div>
+    </div>`;
+  }).join('');
+
+  container.innerHTML = html;
+  container.querySelectorAll('.eq-row').forEach(row => {
+    row.onclick = () => openDetail(+row.dataset.idx);
+  });
+}
+
+// ===== 카테고리 필터 버튼 =====
+document.querySelectorAll('#catFilter .cat-chip').forEach(chip => {
+  chip.onclick = () => {
+    document.querySelectorAll('#catFilter .cat-chip').forEach(c=>c.classList.remove('on'));
+    chip.classList.add('on');
+    curCat = chip.dataset.cat;
+    renderList(document.getElementById('searchInput').value);
+  };
+});
+
+// ===== 상세 팝업 =====
+function openDetail(idx){
+  const item = DB[idx];
+  if(!item) return;
+  const repairSum = repairTotal(item);
+  const totalCost = item.buy + repairSum;
+  const margin = item.sell - totalCost;
+  const photos = (item.photos && item.photos.length)
+    ? `<div class="dt-photos">${item.photos.map(p=>`<img src="${p}" alt="">`).join('')}</div>`
+    : `<div class="dt-noimg">${EQ_ICON.replace('width="1.5"','width="2"')}</div>`;
+  const buyStr = item.buyDate ? `${item.buyDate}<br>${esc(item.buyCust||'-')}` : '미등록';
+  const sellStr = item.sellDate ? `${item.sellDate}<br>${esc(item.sellCust||'-')}` : '야적장 보관<br>(판매대기)';
+
+  document.getElementById('detailBody').innerHTML = photos + `
+    <div class="dt-body">
+      <div class="dt-cat">${esc(item.cat||'기타')} · ${esc(item.brand)}</div>
+      <div class="dt-title">${esc(item.model)}</div>
+      <div class="dt-price">${Number(item.sell).toLocaleString()}<small>만원</small></div>
+      <div class="dt-margin">원가 ${totalCost.toLocaleString()}만 (매입 ${item.buy.toLocaleString()} + 정비 ${repairSum.toLocaleString()}) · 예상 마진 <b>+${margin.toLocaleString()}만</b></div>
+      <dl class="dt-spec">
+        <dt>연식</dt><dd>${item.year}년식</dd>
+        <dt>가동시간</dt><dd>${Number(item.hours).toLocaleString()} Hrs</dd>
+        <dt>관리번호</dt><dd>${esc(item.serial)}</dd>
+        <dt>상태</dt><dd>${esc(item.status)}</dd>
+      </dl>
+      <div class="dt-trade">
+        <div class="dt-trade-box"><div class="tb-label">📥 매입</div><div class="tb-val">${buyStr}</div></div>
+        <div class="dt-trade-box"><div class="tb-label">📤 판매</div><div class="tb-val">${sellStr}</div></div>
+      </div>
+      <button class="dt-del" id="dtDelBtn">🗑️ 이 장비 입고취소(삭제)</button>
+    </div>`;
+
+  document.getElementById('dtDelBtn').onclick = () => {
+    if(confirm(`[${item.serial}] 장비를 삭제할까요?`)){
+      if(CLOUD_ON && item.cloudId){ FDB.collection(STOCK_COL).doc(item.cloudId).delete().catch(()=>{}); }
+      DB.splice(idx, 1);
+      localStorage.setItem('KSCAT_DB', JSON.stringify(DB));
+      closeDetail();
+      renderList(document.getElementById('searchInput').value);
+    }
+  };
+  document.getElementById('detailOverlay').classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+function closeDetail(){
+  document.getElementById('detailOverlay').classList.remove('show');
+  document.body.style.overflow = '';
+}
+document.getElementById('detailClose').onclick = closeDetail;
+document.getElementById('detailOverlay').onclick = (e) => { if(e.target.id==='detailOverlay') closeDetail(); };
+
+document.getElementById('searchInput').oninput = (e) => {
+  renderList(e.target.value);
+};
+loadFromCloud();
+
+// 시작 시: Firestore에서 최신 재고 불러오기 (클라우드 우선, 실패 시 로컬)
+async function loadFromCloud(){
+  if(!CLOUD_ON){ renderList(); return; }
+  try{
+    const snap = await FDB.collection(STOCK_COL).orderBy('createdAt','desc').get();
+    if(!snap.empty){
+      DB = snap.docs.map(d => ({ cloudId: d.id, ...d.data() }));
+      localStorage.setItem('KSCAT_DB', JSON.stringify(DB));
+    }
+    // 기타 일정 로드
+    const msnap = await FDB.collection('schedules').get();
+    if(!msnap.empty){
+      MEMOS = msnap.docs.map(d=>d.data());
+      localStorage.setItem('KSCAT_MEMOS', JSON.stringify(MEMOS));
+    }
+  }catch(err){
+    console.warn('클라우드 로드 실패 — 로컬 데이터 표시', err);
+  }
+  renderList();
+}
+
+// ===================== 정비관리 =====================
+function viewFixPhoto(src){
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.innerHTML = `<img src="${src}" style="max-width:100%;max-height:100%;border-radius:10px">`;
+  ov.onclick = ()=>ov.remove();
+  document.body.appendChild(ov);
+}
+function renderFixTab(){
+  // 장비 선택 드롭다운 채우기
+  const sel = document.getElementById('fix_target');
+  sel.innerHTML = DB.map((it,i)=>`<option value="${i}">${esc(it.brand)} ${esc(it.model)} (${esc(it.serial)})</option>`).join('');
+  // 오늘 날짜 기본값
+  const fd = document.getElementById('fix_date');
+  if(!fd.value) fd.value = new Date().toISOString().slice(0,10);
+  renderFixHistory();
+}
+function renderFixHistory(){
+  const wrap = document.getElementById('fix-history');
+  // 정비내역 있는 장비만
+  const withFix = DB.map((it,i)=>({it,i})).filter(x=>x.it.repairs && x.it.repairs.length);
+  if(!withFix.length){
+    wrap.innerHTML = `<div class="fix-empty">🔧 등록된 정비 내역이 없습니다.<br>위에서 장비를 선택하고 정비 내역을 추가하세요.</div>`;
+    return;
+  }
+  wrap.innerHTML = withFix.map(({it,i})=>{
+    const total = it.repairs.reduce((s,r)=>s+(+r.cost||0),0);
+    const rows = it.repairs.map((r,ri)=>{
+      const pics = (r.photos && r.photos.length)
+        ? `<div class="fix-photos">${r.photos.map(p=>`<img src="${p}" onclick="viewFixPhoto('${p}')">`).join('')}</div>`
+        : '';
+      return `<div class="fix-row">
+        <span>${esc(r.date)} · ${esc(r.desc)||'-'}</span>
+        <span>${Number(r.cost).toLocaleString()}만 <span class="fr-del" onclick="delRepair(${i},${ri})">✕</span></span>
+      </div>${pics}`;
+    }).join('');
+    return `<div class="fix-card">
+      <div class="fc-top"><span class="fc-model">${esc(it.brand)} ${esc(it.model)}</span><span class="fc-total">정비비 합 ${total.toLocaleString()}만</span></div>
+      ${rows}
+    </div>`;
+  }).join('');
+}
+function addRepair(){
+  const idx = +document.getElementById('fix_target').value;
+  const date = document.getElementById('fix_date').value;
+  const cost = +document.getElementById('fix_cost').value || 0;
+  const desc = document.getElementById('fix_desc').value.trim();
+  if(!DB[idx]){ alert('장비를 선택하세요'); return; }
+  if(!date){ alert('정비일을 입력하세요'); return; }
+  if(!DB[idx].repairs) DB[idx].repairs = [];
+  DB[idx].repairs.push({date, cost, desc, photos:[...fixPhotos]});
+  saveDB(idx);
+  document.getElementById('fix_cost').value = '';
+  document.getElementById('fix_desc').value = '';
+  fixPhotos = []; document.getElementById('fix-photo-zone').innerHTML = '';
+  renderFixHistory();
+  renderList(document.getElementById('searchInput').value);
+  alert('🔧 정비 내역이 추가되었습니다. 정비비가 원가에 반영됩니다.');
+}
+
+// 정비 사진 미리보기 (자동 압축, 최대 4장)
+let fixPhotos = [];
+function previewFixPhotos(input){
+  const zone = document.getElementById('fix-photo-zone');
+  Array.from(input.files).slice(0, 4 - fixPhotos.length).forEach(file => {
+    compressPhoto(file).then(b64 => {
+      if(fixPhotos.length >= 4) return;
+      fixPhotos.push(b64);
+      const img = document.createElement('img');
+      img.src = b64;
+      zone.appendChild(img);
+    });
+  });
+  input.value = '';
+}
+function delRepair(idx, ri){
+  if(!confirm('이 정비 내역을 삭제할까요?')) return;
+  DB[idx].repairs.splice(ri,1);
+  saveDB(idx);
+  renderFixHistory();
+  renderList(document.getElementById('searchInput').value);
+}
+// DB 저장 (로컬 + 클라우드 한 건 업데이트)
+function saveDB(idx){
+  localStorage.setItem('KSCAT_DB', JSON.stringify(DB));
+  if(CLOUD_ON && DB[idx] && DB[idx].cloudId){
+    const {cloudId, ...data} = DB[idx];
+    FDB.collection(STOCK_COL).doc(cloudId).update(data).catch(()=>{});
+  }
+}
+
+// ===================== 입고현황 (미판매 장비만) =====================
+function renderStockTab(){
+  const wrap = document.getElementById('stock-container');
+  const today = new Date();
+  const stock = DB.map((it,i)=>({it,i})).filter(x=>!x.it.sellDate);  // 판매일 없으면 재고
+  if(!stock.length){
+    wrap.innerHTML = `<div class="fix-empty">📦 현재 입고 보관 중인(미판매) 장비가 없습니다.</div>`;
+    return;
+  }
+  wrap.innerHTML = `<div class="list-count">입고 보관중 <b>${stock.length}대</b></div>` + stock.map(({it,i})=>{
+    let days = '-';
+    if(it.buyDate){
+      const d = Math.floor((today - new Date(it.buyDate)) / 86400000);
+      days = d >= 0 ? d : 0;
+    }
+    return `<div class="stock-card" onclick="openDetail(${i})">
+      <div class="sc-main">
+        <div class="sc-model">${esc(it.brand)} ${esc(it.model)}</div>
+        <div class="sc-meta">📥 ${esc(it.buyDate)||'입고일 미등록'} · ${esc(it.buyCust)||'매입처 미등록'}</div>
+      </div>
+      <div class="sc-days"><b>${days}</b><small>일 보관</small></div>
+    </div>`;
+  }).join('');
+}
+
+// ===================== 캘린더 =====================
+let calYear, calMonth, calSelDay = null;
+function buildEvents(){
+  // {'2026-05-18': [{type:'판매',label:'...'}], ...}
+  const ev = {};
+  const push = (date, type, label, memoId) => {
+    if(!date) return;
+    (ev[date] = ev[date] || []).push({type, label, memoId});
+  };
+  DB.forEach(it=>{
+    push(it.buyDate, '입고', `${it.brand} ${it.model}`);
+    push(it.sellDate, '판매', `${it.brand} ${it.model}`);
+    if(it.repairs) it.repairs.forEach(r=>push(r.date, '정비', `${it.model} · ${r.desc||'정비'}`));
+  });
+  // 기타 일정(직접 등록)
+  MEMOS.forEach(m=>push(m.date, '기타', m.text, m.id));
+  return ev;
+}
+const EV_COLOR = {'입고':'#0d9668','판매':'#dc3545','정비':'#e2620a','기타':'#7c5cdb'};
+function renderCalendar(){
+  const ev = buildEvents();
+  const grid = document.getElementById('calGrid');
+  document.getElementById('calMonth').textContent = `${calYear}년 ${calMonth+1}월`;
+  const first = new Date(calYear, calMonth, 1).getDay();
+  const days = new Date(calYear, calMonth+1, 0).getDate();
+  const todayStr = new Date().toISOString().slice(0,10);
+  let html = ['일','월','화','수','목','금','토'].map(w=>`<div style="text-align:center;font-size:11px;color:#909bab;font-weight:700;padding:4px 0">${w}</div>`).join('');
+  for(let i=0;i<first;i++) html += `<div class="cal-cell empty"></div>`;
+  for(let d=1;d<=days;d++){
+    const ds = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dayEv = ev[ds] || [];
+    const dots = [...new Set(dayEv.map(e=>e.type))].map(t=>`<i style="width:5px;height:5px;border-radius:50%;background:${EV_COLOR[t]};display:inline-block;margin:0 1px"></i>`).join('');
+    html += `<div class="cal-cell${ds===todayStr?' today':''}${ds===calSelDay?' sel':''}" onclick="selectCalDay('${ds}')">
+      <span>${d}</span><div style="margin-top:2px;height:6px">${dots}</div></div>`;
+  }
+  grid.innerHTML = html;
+}
+function selectCalDay(ds){
+  calSelDay = ds; renderCalendar();
+  const ev = buildEvents()[ds] || [];
+  const [y,m,d] = ds.split('-');
+  document.getElementById('dayTitle').textContent = `${y}.${m}.${d} 일정`;
+  const body = document.getElementById('dayBody');
+  let list = ev.length
+    ? ev.map(e=>{
+        const delBtn = e.type==='기타' && e.memoId ? `<span class="fr-del" style="margin-left:auto" onclick="delMemo('${e.memoId}')">✕</span>` : '';
+        return `<div class="cal-day-item"><span class="cdi-tag" style="background:${EV_COLOR[e.type]}">${e.type}</span><span style="flex:1">${esc(e.label)}</span>${delBtn}</div>`;
+      }).join('')
+    : `<div class="cal-day-empty">등록된 일정이 없습니다.</div>`;
+  // 기타 일정 입력
+  list += `<div class="memo-add">
+    <input type="text" id="memoInput" placeholder="기타 일정 입력 (미팅, 점검, 세금 등)">
+    <button onclick="addMemo('${ds}')">추가</button>
+  </div>`;
+  body.innerHTML = list;
+  document.getElementById('dayOverlay').classList.add('show');
+}
+function addMemo(ds){
+  const inp = document.getElementById('memoInput');
+  const text = inp.value.trim();
+  if(!text){ inp.focus(); return; }
+  const memo = { id: 'm'+Date.now(), date: ds, text };
+  MEMOS.push(memo);
+  saveMemos();
+  if(CLOUD_ON){ FDB.collection('schedules').doc(memo.id).set(memo).catch(()=>{}); }
+  selectCalDay(ds);   // 새로고침
+}
+function delMemo(id){
+  const i = MEMOS.findIndex(m=>m.id===id);
+  if(i<0) return;
+  const ds = MEMOS[i].date;
+  MEMOS.splice(i,1);
+  saveMemos();
+  if(CLOUD_ON){ FDB.collection('schedules').doc(id).delete().catch(()=>{}); }
+  selectCalDay(ds);
+}
+function saveMemos(){ localStorage.setItem('KSCAT_MEMOS', JSON.stringify(MEMOS)); }
+function closeDayPop(){ document.getElementById('dayOverlay').classList.remove('show'); }
+document.getElementById('dayClose').onclick = closeDayPop;
+document.getElementById('dayOverlay').onclick = (e)=>{ if(e.target.id==='dayOverlay') closeDayPop(); };
+function openCalendar(){
+  const now = new Date();
+  if(calYear===undefined){ calYear=now.getFullYear(); calMonth=now.getMonth(); }
+  renderCalendar();
+  document.getElementById('calOverlay').classList.add('show');
+  document.body.style.overflow='hidden';
+}
+document.getElementById('calClose').onclick = ()=>{
+  document.getElementById('calOverlay').classList.remove('show');
+  document.body.style.overflow='';
+};
+document.getElementById('calOverlay').onclick = (e)=>{ if(e.target.id==='calOverlay'){ document.getElementById('calOverlay').classList.remove('show'); document.body.style.overflow=''; } };
+document.getElementById('calPrev').onclick = ()=>{ calMonth--; if(calMonth<0){calMonth=11;calYear--;} renderCalendar(); };
+document.getElementById('calNext').onclick = ()=>{ calMonth++; if(calMonth>11){calMonth=0;calYear++;} renderCalendar(); };
+
+</script>
+</body>
+</html>
